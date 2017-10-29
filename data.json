@@ -1,0 +1,17 @@
+{
+	"users" : [
+		{
+			"id" : 0,
+			"watch_list": [
+				{
+					"id" : 1,
+					"market" : "btc-idr",
+					"price_limit" : 82000000,
+					"notify_when" : "above"
+				}
+			]
+		}
+	],
+
+	"watch_sequence" : 0
+}
