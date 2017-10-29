@@ -1,8 +1,8 @@
 package main
 
 import (
-	"github.com/alvinantonius/pantau-koin-bot/src/config"
-	"github.com/alvinantonius/pantau-koin-bot/src/data"
+	"github.com/alvinantonius/crypto-alert-bot/src/config"
+	"github.com/alvinantonius/crypto-alert-bot/src/data"
 )
 
 func main() {
