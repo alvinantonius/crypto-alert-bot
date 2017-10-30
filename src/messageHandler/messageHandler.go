@@ -2,11 +2,13 @@ package messageHandler
 
 import (
 	"fmt"
+	"log"
 	"strconv"
 	"strings"
 
 	"github.com/alvinantonius/crypto-alert-bot/src/data"
 	"github.com/alvinantonius/crypto-alert-bot/src/messageSender"
+	"github.com/alvinantonius/crypto-alert-bot/src/priceChecker"
 )
 
 // HandleMessage is for handle command from user
@@ -26,6 +28,8 @@ func HandleMessage(userID int64, message string) {
 	if len(params) == 0 {
 		return
 	}
+
+	fmt.Println(params)
 
 	switch params[0] {
 	case "/start":
@@ -59,9 +63,27 @@ func addWatch(userID int64, params []string) error {
 	priceString := params[3]
 	price, _ := strconv.ParseFloat(priceString, 64)
 
+	// check if market is valid
+
+	fmt.Println("add watch")
 	_, err := data.AddWatch(userID, market, price, when)
 
-	return err
+	if err == data.ErrInvalidMarket {
+		messageSender.NotifyInvalidMarket(userID, market)
+		return err
+	}
+
+	if err != nil {
+		log.Println("fail add watch", err)
+		return err
+	}
+
+	fmt.Println("refrech price check")
+	priceChecker.Refresh()
+
+	messageSender.NotifySuccessAdd(userID, market, price, when)
+
+	return nil
 }
 
 func removeWatch(userID int64, params []string) error {
@@ -76,9 +98,26 @@ func removeWatch(userID int64, params []string) error {
 
 	watchID, _ := strconv.ParseInt(params[1], 10, 64)
 
-	return data.RemoveWatch(watchID)
+	err := data.RemoveWatch(watchID)
+
+	if err != nil {
+		log.Println("fail remove watch", err)
+		return err
+	}
+
+	fmt.Println("refrech price check")
+	priceChecker.Refresh()
+
+	messageSender.NotifySuccessRemove(userID)
+
+	return nil
 }
 
 func listWatch(userID int64) error {
-	return nil
+
+	if !data.IsUserRegistered(userID) {
+		return nil
+	}
+
+	return messageSender.NotifyListAlert(userID)
 }

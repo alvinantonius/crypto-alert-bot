@@ -2,6 +2,7 @@ package data
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -31,6 +32,9 @@ type (
 		When       string  `json:"notify_when"`
 	}
 )
+
+// ErrInvalidMarket is error for invalid market
+var ErrInvalidMarket = errors.New("invalid market")
 
 var mutex *sync.Mutex
 
@@ -63,6 +67,19 @@ func LoadData() error {
 	indexData()
 
 	return nil
+}
+
+// SupportedMarket is list of supported market
+var SupportedMarket map[string]bool
+
+func init() {
+	SupportedMarket = make(map[string]bool)
+	SupportedMarket["btc-idr"] = true
+	SupportedMarket["bch-idr"] = true
+	SupportedMarket["xzc-idr"] = true
+	SupportedMarket["eth-idr"] = true
+	SupportedMarket["etc-idr"] = true
+	SupportedMarket["ltc-idr"] = true
 }
 
 func indexData() {
@@ -128,9 +145,7 @@ func AddUser(userID int64) {
 
 // AddWatch is for adding new market watch for user
 func AddWatch(userID int64, market string, price float64, when string) (Watch, error) {
-	if !IsUserRegistered(userID) {
-		return Watch{}, fmt.Errorf("userID not found")
-	}
+	AddUser(userID)
 
 	// get user index index
 	uIndex := userIndex[userID]
@@ -140,6 +155,10 @@ func AddWatch(userID int64, market string, price float64, when string) (Watch, e
 
 	market = strings.ToLower(market)
 	// TODO validate market string
+
+	if _, ok := SupportedMarket[market]; !ok {
+		return Watch{}, ErrInvalidMarket
+	}
 
 	// validate when
 	when = strings.ToLower(when)
@@ -201,13 +220,18 @@ func RemoveWatch(watchID int64) error {
 	uIndex, _ := strconv.Atoi(indexes[0])
 	wIndex, _ := strconv.Atoi(indexes[1])
 
+	if len(data.Users[uIndex].WatchList) <= 1 {
+		data.Users[uIndex].WatchList = []Watch{}
+	} else {
+		mutex.Lock()
+		defer mutex.Unlock()
+		data.Users[uIndex].WatchList = append(
+			data.Users[uIndex].WatchList[:wIndex],
+			data.Users[uIndex].WatchList[wIndex+1:]...,
+		)
+	}
+
 	// remove watch
-	mutex.Lock()
-	defer mutex.Unlock()
-	data.Users[uIndex].WatchList = append(
-		data.Users[uIndex].WatchList[:wIndex],
-		data.Users[uIndex].WatchList[wIndex+1:]...,
-	)
 
 	SaveData()
 
@@ -223,6 +247,17 @@ func ListWatch(userID int64) ([]Watch, error) {
 	uIndex := userIndex[userID]
 
 	return data.Users[uIndex].WatchList, nil
+}
+
+// GetUser is for retrieving user based on userID
+func GetUser(userID int64) (User, error) {
+	if !IsUserRegistered(userID) {
+		return User{}, fmt.Errorf("User not found")
+	}
+
+	uIndex := userIndex[userID]
+	return data.Users[uIndex], nil
+
 }
 
 // GetUserID is for get this watch userID

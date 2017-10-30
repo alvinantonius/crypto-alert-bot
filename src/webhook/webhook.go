@@ -40,10 +40,14 @@ func Handler(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
 	decoder := json.NewDecoder(r.Body)
 	decoder.Decode(&data)
 
+	log.Println(data)
+
 	// return if bot
 	if data.Message.From.IsBot {
 		return
 	}
+
+	messageHandler.HandleMessage(data.Message.From.ID, data.Message.Text)
 }
 
 // Init is for initializing webhook

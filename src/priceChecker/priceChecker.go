@@ -13,6 +13,7 @@ import (
 
 	"github.com/alvinantonius/crypto-alert-bot/src/config"
 	"github.com/alvinantonius/crypto-alert-bot/src/data"
+	"github.com/alvinantonius/crypto-alert-bot/src/messageSender"
 )
 
 const (
@@ -53,7 +54,7 @@ var httpClient *http.Client
 func (a alerts) Len() int {
 	return len(a)
 }
-func (a alerts) Swap(i, j, int) {
+func (a alerts) Swap(i, j int) {
 	a[i], a[j] = a[j], a[i]
 }
 func (a alerts) Less(i, j int) bool {
@@ -77,6 +78,18 @@ func init() {
 		URL:         fmt.Sprintf("%v/xzc_idr/ticker", bitcoinIndonesiaHost),
 		Marketplace: "bitcoin.co.id",
 	}
+	marketCheckList["eth-idr"] = marketCheck{
+		URL:         fmt.Sprintf("%v/eth_idr/ticker", bitcoinIndonesiaHost),
+		Marketplace: "bitcoin.co.id",
+	}
+	marketCheckList["etc-idr"] = marketCheck{
+		URL:         fmt.Sprintf("%v/etc_idr/ticker", bitcoinIndonesiaHost),
+		Marketplace: "bitcoin.co.id",
+	}
+	marketCheckList["ltc-idr"] = marketCheck{
+		URL:         fmt.Sprintf("%v/ltc_idr/ticker", bitcoinIndonesiaHost),
+		Marketplace: "bitcoin.co.id",
+	}
 
 	priceCheckList = make(map[string]bool)
 
@@ -86,10 +99,10 @@ func init() {
 	mutex = &sync.Mutex{}
 
 	// init http client for request
-	httpClient = &http.Client{Timeout: 1 * time.Second}
+	httpClient = &http.Client{Timeout: 10 * time.Second}
 }
 
-func (m marketCheckList) CheckPrice() (float64, error) {
+func (m marketCheck) CheckPrice() (float64, error) {
 	resp, err := httpClient.Get(m.URL)
 	if err != nil {
 		log.Printf("error do http req for URL:%v err:%v", m.URL, err)
@@ -144,10 +157,12 @@ func Refresh() {
 
 	// sort all alerts
 	for market, alertList := range tempAlertAbove {
-		tempAlertAbove[market] = sort.Sort(alertList)
+		sort.Sort(alertList)
+		tempAlertAbove[market] = alertList
 	}
 	for market, alertList := range tempAlertBelow {
-		tempAlertBelow[market] = sort.Sort(alertList)
+		sort.Sort(alertList)
+		tempAlertBelow[market] = alertList
 	}
 
 	// replace old data with the new one
@@ -180,15 +195,86 @@ func RunChecker() {
 			}
 
 			wg.Add(1)
-			go func() {
+			go func(market string) {
 				defer wg.Done()
-				marketCheckList[market].CheckPrice()
-			}()
+				fmt.Println("do check", market)
+				currentPrice, err := marketCheckList[market].CheckPrice()
+				if err != nil {
+					log.Printf("fail on check:%v err:%v", market, err)
+					return
+				}
+
+				userList := getNotifiedUserList(market, currentPrice)
+
+				if len(userList) > 0 {
+					for _, userID := range userList {
+						messageSender.NotifyUser(userID, market, currentPrice)
+					}
+
+					Refresh()
+				}
+
+				return
+
+			}(market)
 		}
 
 		wg.Wait()
 
 		// wait until check again
-		time.Sleep(config.Data.CheckPeriod * time.Second)
+		time.Sleep(time.Duration(config.Data.CheckPeriod) * time.Second)
 	}
+}
+
+// based on current price, check which user is need to be notified
+func getNotifiedUserList(market string, currentPrice float64) []int64 {
+
+	// map of userID => watchID
+	notifiedUser := make(map[int64]int64)
+
+	// check above list
+	if _, ok := alertAboveList[market]; ok {
+		for i := 0; i < len(alertAboveList[market]); i++ {
+			if alertAboveList[market][i].PriceLimit > currentPrice {
+				alertAboveList[market] = alertAboveList[market][i:]
+				break
+			}
+
+			if alertAboveList[market][i].PriceLimit <= currentPrice {
+				userID := alertAboveList[market][i].GetUserID()
+				notifiedUser[userID] = alertAboveList[market][i].ID
+			}
+		}
+	}
+
+	// check below list
+	if _, ok := alertBelowList[market]; ok {
+		for i := len(alertBelowList[market]) - 1; i >= 0; i-- {
+			if alertBelowList[market][i].PriceLimit < currentPrice {
+				sisa := i
+				if i-1 < 0 {
+					sisa = 0
+				}
+				alertBelowList[market] = alertBelowList[market][:sisa]
+				break
+			}
+
+			if alertBelowList[market][i].PriceLimit >= currentPrice {
+				userID := alertBelowList[market][i].GetUserID()
+				notifiedUser[userID] = alertBelowList[market][i].ID
+			}
+		}
+	}
+
+	var result []int64
+
+	// compile map to slice of userID
+	// also remove watch that has been triggered
+	for userID, watchID := range notifiedUser {
+		result = append(result, userID)
+
+		data.RemoveWatch(watchID)
+	}
+
+	return result
 }
