@@ -121,6 +121,8 @@ func AddUser(userID int64) {
 	data.Users = append(data.Users, User{ID: userID})
 	userIndex[userID] = uIndex
 
+	SaveData()
+
 	return
 }
 
@@ -179,8 +181,9 @@ func AddWatch(userID int64, market string, price float64, when string) (Watch, e
 	// add to watch index
 	watchIndex[watchID] = fmt.Sprintf("%v-%v", uIndex, wIndex)
 
-	return watchData, nil
+	SaveData()
 
+	return watchData, nil
 }
 
 // RemoveWatch is for removing watch
@@ -206,5 +209,29 @@ func RemoveWatch(watchID int64) error {
 		data.Users[uIndex].WatchList[wIndex+1:]...,
 	)
 
+	SaveData()
+
 	return nil
+}
+
+// ListWatch is for retrieving certain user alert list
+func ListWatch(userID int64) ([]Watch, error) {
+	if !IsUserRegistered(userID) {
+		return []Watch{}, fmt.Errorf("userID not exist")
+	}
+
+	uIndex := userIndex[userID]
+
+	return data.Users[uIndex].WatchList, nil
+}
+
+// GetUserID is for get this watch userID
+func (w Watch) GetUserID() int64 {
+	userWatchIndex := watchIndex[w.ID]
+	indexes := strings.Split(userWatchIndex, "-")
+
+	// parse all index to integer
+	uIndex, _ := strconv.Atoi(indexes[0])
+
+	return data.Users[uIndex].ID
 }
