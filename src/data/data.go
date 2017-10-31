@@ -220,8 +220,10 @@ func RemoveWatch(watchID int64) error {
 	uIndex, _ := strconv.Atoi(indexes[0])
 	wIndex, _ := strconv.Atoi(indexes[1])
 
-	if len(data.Users[uIndex].WatchList) <= 1 {
-		data.Users[uIndex].WatchList = []Watch{}
+	log.Printf("removing userID:%v wIndex:%v\n", data.Users[uIndex].ID, wIndex)
+
+	if len(data.Users[uIndex].WatchList)-1 == wIndex {
+		data.Users[uIndex].WatchList = data.Users[uIndex].WatchList[:wIndex]
 	} else {
 		mutex.Lock()
 		defer mutex.Unlock()
