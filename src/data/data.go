@@ -224,7 +224,7 @@ func RemoveWatch(watchID int64) error {
 
 	if len(data.Users[uIndex].WatchList)-1 == wIndex {
 		data.Users[uIndex].WatchList = data.Users[uIndex].WatchList[:wIndex]
-	} else {
+	} else if len(data.Users[uIndex].WatchList) > wIndex {
 		mutex.Lock()
 		defer mutex.Unlock()
 		data.Users[uIndex].WatchList = append(
