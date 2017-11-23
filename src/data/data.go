@@ -240,6 +240,25 @@ func RemoveWatch(watchID int64) error {
 	return nil
 }
 
+// ClearWatch is for clear all watch
+func ClearWatch(userID int64) error {
+	// validate userID
+	if _, ok := userIndex[userID]; !ok {
+		return fmt.Errorf("invalid user id on ClearWatch")
+	}
+
+	log.Printf("clearing userID:%v watch list", userID)
+
+	uIndex := userIndex[userID]
+	if len(data.Users) > uIndex {
+		data.Users[uIndex].WatchList = data.Users[uIndex].WatchList[:0]
+	}
+
+	SaveData()
+
+	return nil
+}
+
 // ListWatch is for retrieving certain user alert list
 func ListWatch(userID int64) ([]Watch, error) {
 	if !IsUserRegistered(userID) {

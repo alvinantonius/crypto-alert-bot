@@ -40,7 +40,10 @@ func HandleMessage(userID int64, message string) {
 		listWatch(userID)
 	case "/remove":
 		removeWatch(userID, params)
+	case "/clear":
+		clearWatch(userID)
 	}
+
 }
 
 func sendHelp(userID int64) error {
@@ -109,6 +112,26 @@ func removeWatch(userID int64, params []string) error {
 	priceChecker.Refresh()
 
 	messageSender.NotifySuccessRemove(userID)
+
+	return nil
+}
+
+func clearWatch(userID int64) error {
+	// validate user
+	if !data.IsUserRegistered(userID) {
+		return fmt.Errorf("invalid clearWatch userID")
+	}
+
+	err := data.ClearWatch(userID)
+	if err != nil {
+		log.Println("fail clear watch :", err)
+		return err
+	}
+
+	fmt.Println("refresh price check")
+	priceChecker.Refresh()
+
+	messageSender.NotifySuccessClear(userID)
 
 	return nil
 }

@@ -85,6 +85,11 @@ func NotifySuccessRemove(userID int64) error {
 	return sendMessage(userID, "Alert removed")
 }
 
+// NotifySuccessClear is for callback that clear is success
+func NotifySuccessClear(userID int64) error {
+	return sendMessage(userID, "All alert cleared")
+}
+
 func sendMessage(userID int64, message string) error {
 
 	messageEnc := url.Values{}
