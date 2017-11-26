@@ -72,6 +72,19 @@ func addWatch(userID int64, params []string) error {
 	_, err := data.AddWatch(userID, market, price, when)
 
 	if err == data.ErrInvalidMarket {
+		if err = priceChecker.RegisterChecker(market); err != nil {
+			if err != data.ErrInvalidMarket {
+				log.Printf("fail register new market %v checker err:%v", market, err)
+			}
+			messageSender.NotifyInvalidMarket(userID, market)
+			return err
+		}
+	}
+
+	// add watcher using newly registered market
+	_, err = data.AddWatch(userID, market, price, when)
+
+	if err == data.ErrInvalidMarket {
 		messageSender.NotifyInvalidMarket(userID, market)
 		return err
 	}

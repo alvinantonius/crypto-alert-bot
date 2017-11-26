@@ -2,12 +2,14 @@ package priceChecker
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"log"
 	"net/http"
 	"sort"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -32,6 +34,7 @@ type (
 		Ticker struct {
 			Last string `json:"last"`
 		} `json:"ticker"`
+		err string `json:"error"`
 	}
 )
 
@@ -49,6 +52,9 @@ var alertBelowList map[string]alerts
 var mutex *sync.Mutex
 
 var httpClient *http.Client
+
+// ErrInvalidMarket is error for invalid market
+var ErrInvalidMarket = errors.New("invalid market")
 
 // Make alert sortable
 func (a alerts) Len() int {
@@ -120,6 +126,10 @@ func (m marketCheck) CheckPrice() (float64, error) {
 	err = json.Unmarshal(body, &resData)
 	if err != nil {
 		return 0, err
+	}
+
+	if resData.err != "" {
+		return 0, ErrInvalidMarket
 	}
 
 	// convert string to float
@@ -195,28 +205,8 @@ func RunChecker() {
 			}
 
 			wg.Add(1)
-			go func(market string) {
-				defer wg.Done()
-				fmt.Println("do check", market)
-				currentPrice, err := marketCheckList[market].CheckPrice()
-				if err != nil {
-					log.Printf("fail on check:%v err:%v", market, err)
-					return
-				}
-
-				userList := getNotifiedUserList(market, currentPrice)
-
-				if len(userList) > 0 {
-					for _, userID := range userList {
-						messageSender.NotifyUser(userID, market, currentPrice)
-					}
-
-					Refresh()
-				}
-
-				return
-
-			}(market)
+			go marketChecker(market)
+			wg.Done()
 		}
 
 		wg.Wait()
@@ -224,6 +214,48 @@ func RunChecker() {
 		// wait until check again
 		time.Sleep(time.Duration(config.Data.CheckPeriod) * time.Second)
 	}
+}
+
+// RegisterChecker is for adding new market watch for user
+// alwo this will trigger new market price checker if available
+func RegisterChecker(market string) error {
+	marketCheckList[market] = marketCheck{
+		URL:         fmt.Sprintf("%v/%v/ticker", bitcoinIndonesiaHost, strings.Replace(market, "-", "_", -1)),
+		Marketplace: "bitcoin.co.id",
+	}
+
+	err := marketChecker(market)
+	if err != nil {
+		delete(marketCheckList, market)
+		return err
+	}
+
+	data.SupportedMarket[market] = true
+	return nil
+}
+
+// marketChecker will run a market checker
+func marketChecker(market string) error {
+	fmt.Println("do check", market)
+	currentPrice, err := marketCheckList[market].CheckPrice()
+	if err != nil {
+		if err != ErrInvalidMarket {
+			log.Printf("fail on check:%v err:%v", market, err)
+		}
+		return err
+	}
+
+	userList := getNotifiedUserList(market, currentPrice)
+
+	if len(userList) > 0 {
+		for _, userID := range userList {
+			messageSender.NotifyUser(userID, market, currentPrice)
+		}
+
+		Refresh()
+	}
+
+	return nil
 }
 
 // based on current price, check which user is need to be notified
