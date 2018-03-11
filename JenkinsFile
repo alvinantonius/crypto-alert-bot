@@ -1,29 +1,31 @@
 pipeline {
     agent any
 
-    stages {
-        stage('Praparing'){
-            steps {
-                sh 'go get'
+    ws("${JENKINS_HOME}/jobs/${JOB_NAME}/builds/${BUILD_ID}/") {
+        withEnv(["GOPATH=${JENKINS_HOME}/jobs/${JOB_NAME}/builds/${BUILD_ID}"]) {
+            stage('Preparing'){
+                steps {
+                    sh 'go get'
+                }
             }
-        }
-        stage('Test') {
-            steps {
-                echo 'Testing..'
-                sh 'go test ./... -v --race --cover'
+            stage('Test') {
+                steps {
+                    echo 'Testing..'
+                    sh 'go test ./... -v --race --cover'
+                }
             }
-        }
-        stage('Build') {
-            steps {
-                echo 'Building..'
-                sh 'go build -o ~/builds/crypto-alert-bot/crypto-alert-bot_${env.BUILD_ID}'
+            stage('Build') {
+                steps {
+                    echo 'Building..'
+                    sh 'go build -o ~/builds/crypto-alert-bot/crypto-alert-bot_${env.BUILD_ID}'
+                }
             }
-        }
-        stage('Deploy') {
-            steps {
-                echo 'Deploying..'
-                sh 'cd ~/ansible/prod'
-                sh 'ansible-playbook -i inventory playbook-crypto-alert-bot.yml --extra-vars "src=~/builds/crypto-alert-bot/crypto-alert-bot_${env.BUILD_ID}"'
+            stage('Deploy') {
+                steps {
+                    echo 'Deploying..'
+                    sh 'cd ~/ansible/prod'
+                    sh 'ansible-playbook -i inventory playbook-crypto-alert-bot.yml --extra-vars "src=~/builds/crypto-alert-bot/crypto-alert-bot_${env.BUILD_ID}"'
+                }
             }
         }
     }
